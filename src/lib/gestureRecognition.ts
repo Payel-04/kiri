@@ -1,6 +1,7 @@
 import { FilesetResolver, HandLandmarker, type HandLandmarkerResult } from '@mediapipe/tasks-vision';
 
-const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
+const WASM_CDN_PRIMARY = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm';
+const WASM_CDN_FALLBACK = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
@@ -8,12 +9,23 @@ let landmarker: HandLandmarker | null = null;
 let initPromise: Promise<HandLandmarker> | null = null;
 let lastVideoTimestamp = -1;
 
+export function resetLandmarkerTimestamp(): void {
+  lastVideoTimestamp = -1;
+}
+
 export async function getHandLandmarker(): Promise<HandLandmarker> {
   if (landmarker) return landmarker;
   if (initPromise) return initPromise;
+
   initPromise = (async () => {
     try {
-      const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
+      let vision;
+      try {
+        vision = await FilesetResolver.forVisionTasks(WASM_CDN_PRIMARY);
+      } catch {
+        vision = await FilesetResolver.forVisionTasks(WASM_CDN_FALLBACK);
+      }
+
       try {
         landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
@@ -28,9 +40,9 @@ export async function getHandLandmarker(): Promise<HandLandmarker> {
           baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
           runningMode: 'VIDEO',
           numHands: 1,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
+          minHandDetectionConfidence: 0.45,
+          minHandPresenceConfidence: 0.45,
+          minTrackingConfidence: 0.45,
         });
       }
       return landmarker;
@@ -39,87 +51,55 @@ export async function getHandLandmarker(): Promise<HandLandmarker> {
       throw err;
     }
   })();
+
   return initPromise;
 }
 
-type Landmark = { x: number; y: number; z: number };
+export type Landmark = { x: number; y: number; z: number };
 
 // Landmark indices
-const WRIST = 0;
-const THUMB_MCP = 2;
-const THUMB_IP = 3;
-const THUMB_TIP = 4;
-const INDEX_MCP = 5;
-const INDEX_PIP = 6;
-const INDEX_TIP = 8;
-const MIDDLE_PIP = 10;
-const MIDDLE_TIP = 12;
-const RING_PIP = 14;
-const RING_TIP = 16;
-const PINKY_MCP = 17;
-const PINKY_PIP = 18;
-const PINKY_TIP = 20;
+export const WRIST = 0;
+export const THUMB_CMC = 1;
+export const THUMB_MCP = 2;
+export const THUMB_IP = 3;
+export const THUMB_TIP = 4;
+export const INDEX_MCP = 5;
+export const INDEX_PIP = 6;
+export const INDEX_DIP = 7;
+export const INDEX_TIP = 8;
+export const MIDDLE_MCP = 9;
+export const MIDDLE_PIP = 10;
+export const MIDDLE_DIP = 11;
+export const MIDDLE_TIP = 12;
+export const RING_MCP = 13;
+export const RING_PIP = 14;
+export const RING_DIP = 15;
+export const RING_TIP = 16;
+export const PINKY_MCP = 17;
+export const PINKY_PIP = 18;
+export const PINKY_DIP = 19;
+export const PINKY_TIP = 20;
 
-function dist(a: Landmark, b: Landmark): number {
+export function dist3d(a: Landmark, b: Landmark): number {
   return Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
 }
 
-function dist2d(a: Landmark, b: Landmark): number {
+export function dist2d(a: Landmark, b: Landmark): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-// Angle at vertex b formed by points a-b-c (in 2D)
-function angle(a: Landmark, b: Landmark, c: Landmark): number {
-  const v1x = a.x - b.x;
-  const v1y = a.y - b.y;
-  const v2x = c.x - b.x;
-  const v2y = c.y - b.y;
+// Normalized angle between three 2D landmarks (in radians)
+export function angleBetween(a: Landmark, vertex: Landmark, c: Landmark): number {
+  const v1x = a.x - vertex.x;
+  const v1y = a.y - vertex.y;
+  const v2x = c.x - vertex.x;
+  const v2y = c.y - vertex.y;
   const dot = v1x * v2x + v1y * v2y;
-  const cross = v1x * v2y - v1y * v2x;
-  return Math.atan2(Math.abs(cross), dot);
-}
-
-// A finger is extended if the tip is significantly farther from the wrist than the PIP joint.
-// Uses 3D distance for robustness and a tuned threshold.
-function isFingerExtended(lm: Landmark[], tip: number, pip: number): boolean {
-  const wrist = lm[WRIST];
-  const tipDist = dist(lm[tip], wrist);
-  const pipDist = dist(lm[pip], wrist);
-  return tipDist > pipDist * 1.15;
-}
-
-// A finger is curled if the tip is close to the palm (closer to MCP than PIP is)
-function isFingerCurled(lm: Landmark[], tip: number, pip: number): boolean {
-  const wrist = lm[WRIST];
-  const tipDist = dist(lm[tip], wrist);
-  const pipDist = dist(lm[pip], wrist);
-  return tipDist < pipDist * 0.95;
-}
-
-// Thumb is extended if the tip is far from the index MCP relative to the thumb IP joint
-function isThumbExtended(lm: Landmark[]): boolean {
-  const tip = lm[THUMB_TIP];
-  const ip = lm[THUMB_IP];
-  const indexMcp = lm[INDEX_MCP];
-  const tipDist = dist2d(tip, indexMcp);
-  const ipDist = dist2d(ip, indexMcp);
-  return tipDist > ipDist * 1.4;
-}
-
-// Thumb is across the palm (touching / near the side of the hand)
-function isThumbAcrossPalm(lm: Landmark[]): boolean {
-  const tip = lm[THUMB_TIP];
-  const pinkyMcp = lm[PINKY_MCP];
-  const indexMcp = lm[INDEX_MCP];
-  // Thumb tip is near the line between index MCP and pinky MCP (across the palm)
-  const tipToLine = dist2d(tip, { x: (indexMcp.x + pinkyMcp.x) / 2, y: (indexMcp.y + pinkyMcp.y) / 2, z: 0 });
-  const palmWidth = dist2d(indexMcp, pinkyMcp);
-  return tipToLine < palmWidth * 0.6;
-}
-
-// Check if thumb tip is touching / very close to a finger tip
-function thumbTouchesFinger(lm: Landmark[], fingerTip: number): boolean {
-  return dist2d(lm[THUMB_TIP], lm[fingerTip]) < 0.07;
+  const mag1 = Math.hypot(v1x, v1y);
+  const mag2 = Math.hypot(v2x, v2y);
+  if (mag1 * mag2 === 0) return 0;
+  const cos = Math.min(Math.max(dot / (mag1 * mag2), -1), 1);
+  return Math.acos(cos);
 }
 
 export type FingerState = {
@@ -128,135 +108,250 @@ export type FingerState = {
   middle: boolean;
   ring: boolean;
   pinky: boolean;
+  indexCurled: boolean;
+  middleCurled: boolean;
+  ringCurled: boolean;
+  pinkyCurled: boolean;
+  thumbExtended: boolean;
+  thumbAcross: boolean;
+  palmSize: number;
 };
 
 export function getFingerStates(lm: Landmark[]): FingerState {
+  const wrist = lm[WRIST];
+  const middleMcp = lm[MIDDLE_MCP];
+  const palmSize = Math.max(dist2d(wrist, middleMcp), 0.001);
+
+  // Finger extension based on normalized distance from MCP and wrist
+  const checkExtended = (tip: number, pip: number, mcp: number): boolean => {
+    const tipToMcp = dist2d(lm[tip], lm[mcp]);
+    const pipToMcp = dist2d(lm[pip], lm[mcp]);
+    const tipToWrist = dist2d(lm[tip], wrist);
+    const pipToWrist = dist2d(lm[pip], wrist);
+    return tipToMcp > pipToMcp * 1.35 && tipToWrist > pipToWrist * 1.1;
+  };
+
+  const checkCurled = (tip: number, pip: number, mcp: number): boolean => {
+    const tipToMcp = dist2d(lm[tip], lm[mcp]);
+    const pipToMcp = dist2d(lm[pip], lm[mcp]);
+    const tipToWrist = dist2d(lm[tip], wrist);
+    const pipToWrist = dist2d(lm[pip], wrist);
+    return tipToMcp < pipToMcp * 1.05 || tipToWrist < pipToWrist * 0.95;
+  };
+
+  const indexExt = checkExtended(INDEX_TIP, INDEX_PIP, INDEX_MCP);
+  const middleExt = checkExtended(MIDDLE_TIP, MIDDLE_PIP, MIDDLE_MCP);
+  const ringExt = checkExtended(RING_TIP, RING_PIP, RING_MCP);
+  const pinkyExt = checkExtended(PINKY_TIP, PINKY_PIP, PINKY_MCP);
+
+  const indexC = checkCurled(INDEX_TIP, INDEX_PIP, INDEX_MCP);
+  const middleC = checkCurled(MIDDLE_TIP, MIDDLE_PIP, MIDDLE_MCP);
+  const ringC = checkCurled(RING_TIP, RING_PIP, RING_MCP);
+  const pinkyC = checkCurled(PINKY_TIP, PINKY_PIP, PINKY_MCP);
+
+  // Thumb analysis
+  const thumbTip = lm[THUMB_TIP];
+  const thumbMcp = lm[THUMB_MCP];
+  const indexMcp = lm[INDEX_MCP];
+  const pinkyMcp = lm[PINKY_MCP];
+
+  // Thumb extended out (away from palm)
+  const thumbTipToIndexMcp = dist2d(thumbTip, indexMcp) / palmSize;
+  const thumbTipToPinkyMcp = dist2d(thumbTip, pinkyMcp) / palmSize;
+  const thumbLength = dist2d(thumbTip, thumbMcp) / palmSize;
+  const thumbExtended = thumbTipToIndexMcp > 0.45 && thumbLength > 0.45;
+
+  // Thumb folded across palm
+  const palmMidX = (indexMcp.x + pinkyMcp.x) / 2;
+  const palmMidY = (indexMcp.y + pinkyMcp.y) / 2;
+  const thumbToPalmMid = Math.hypot(thumbTip.x - palmMidX, thumbTip.y - palmMidY) / palmSize;
+  const thumbAcross = thumbToPalmMid < 0.55 || thumbTipToPinkyMcp < 0.6;
+
   return {
-    thumb: isThumbExtended(lm),
-    index: isFingerExtended(lm, INDEX_TIP, INDEX_PIP),
-    middle: isFingerExtended(lm, MIDDLE_TIP, MIDDLE_PIP),
-    ring: isFingerExtended(lm, RING_TIP, RING_PIP),
-    pinky: isFingerExtended(lm, PINKY_TIP, PINKY_PIP),
+    thumb: thumbExtended,
+    index: indexExt,
+    middle: middleExt,
+    ring: ringExt,
+    pinky: pinkyExt,
+    indexCurled: indexC,
+    middleCurled: middleC,
+    ringCurled: ringC,
+    pinkyCurled: pinkyC,
+    thumbExtended,
+    thumbAcross,
+    palmSize,
   };
 }
 
-// Classify ASL letters based on finger states + landmark geometry.
-export function classifyLetter(lm: Landmark[]): string | null {
+export type GestureClassification = {
+  letter: string | null;
+  label: string;
+  category: 'letter' | 'number' | 'sign' | 'phrase';
+  confidence: number;
+};
+
+// Comprehensive ASL alphabet and gesture classifier
+export function classifyGesture(lm: Landmark[]): GestureClassification {
   const f = getFingerStates(lm);
-  const thumbAcross = isThumbAcrossPalm(lm);
-  const extendedCount = [f.index, f.middle, f.ring, f.pinky].filter(Boolean).length;
+  const { palmSize } = f;
+  const thumbTip = lm[THUMB_TIP];
+  const indexTip = lm[INDEX_TIP];
+  const middleTip = lm[MIDDLE_TIP];
+  const ringTip = lm[RING_TIP];
+  const indexMcp = lm[INDEX_MCP];
 
-  // Fist — all fingers curled
-  const indexCurled = isFingerCurled(lm, INDEX_TIP, INDEX_PIP);
-  const middleCurled = isFingerCurled(lm, MIDDLE_TIP, MIDDLE_PIP);
-  const ringCurled = isFingerCurled(lm, RING_TIP, RING_PIP);
-  const pinkyCurled = isFingerCurled(lm, PINKY_TIP, PINKY_PIP);
-  const allCurled = indexCurled && middleCurled && ringCurled && pinkyCurled;
+  const extCount = [f.index, f.middle, f.ring, f.pinky].filter(Boolean).length;
+  const allFourCurled = f.indexCurled && f.middleCurled && f.ringCurled && f.pinkyCurled;
+  const allFourExtended = f.index && f.middle && f.ring && f.pinky;
 
-  // S: fist with thumb tucked across fingers
-  if (allCurled && thumbAcross && !f.thumb) return 'S';
-  // E: all fingers curled, thumb tip near index-middle area (tucked)
-  if (allCurled && !f.thumb) return 'E';
-  // A: fist with thumb extended to the side
-  if (allCurled && f.thumb) return 'A';
-  // O: fingertips meet thumb tip (circle)
-  if (!f.index && !f.middle && !f.ring && !f.pinky && !f.thumb) {
-    if (thumbTouchesFinger(lm, INDEX_TIP) && thumbTouchesFinger(lm, MIDDLE_TIP)) return 'O';
-    return 'A';
+  // Distances normalized by palm size
+  const thumbToIndexTipDist = dist2d(thumbTip, indexTip) / palmSize;
+  const thumbToMiddleTipDist = dist2d(thumbTip, middleTip) / palmSize;
+  const thumbToRingTipDist = dist2d(thumbTip, ringTip) / palmSize;
+  const indexToMiddleTipDist = dist2d(indexTip, middleTip) / palmSize;
+  const middleToRingTipDist = dist2d(middleTip, ringTip) / palmSize;
+
+  // 1. I LOVE YOU (ILY): Thumb + Index + Pinky extended, Middle & Ring curled
+  if (f.thumbExtended && f.index && !f.middle && !f.ring && f.pinky) {
+    return { letter: 'ILY', label: 'I Love You 🤟', category: 'phrase', confidence: 0.94 };
   }
 
-  // B: four fingers up, thumb across palm
-  if (f.index && f.middle && f.ring && f.pinky && (thumbAcross || !f.thumb)) return 'B';
-
-  // D: index up only, thumb touches middle finger
-  if (f.index && !f.middle && !f.ring && !f.pinky) {
-    if (thumbTouchesFinger(lm, MIDDLE_TIP) || thumbAcross) return 'D';
-    return 'D';
+  // 2. Y ("Hang Loose" / Yellow / Y): Thumb + Pinky extended only
+  if (f.thumbExtended && !f.index && !f.middle && !f.ring && f.pinky) {
+    return { letter: 'Y', label: 'Letter Y', category: 'letter', confidence: 0.92 };
   }
 
-  // F: thumb+index touch (circle), middle/ring/pinky up
-  if (!f.index && !f.thumb && f.middle && f.ring && f.pinky) {
-    if (thumbTouchesFinger(lm, INDEX_TIP)) return 'F';
-    return 'F';
+  // 3. L: Thumb + Index extended in an L shape (~90 deg), Middle, Ring, Pinky curled
+  if (f.thumbExtended && f.index && !f.middle && !f.ring && !f.pinky) {
+    const lAngle = angleBetween(thumbTip, lm[THUMB_MCP], indexTip);
+    if (lAngle > 0.4 && thumbToIndexTipDist > 0.5) {
+      return { letter: 'L', label: 'Letter L', category: 'letter', confidence: 0.93 };
+    }
   }
 
-  // G: index points sideways, thumb alongside (horizontal)
-  // H: index+middle horizontal
-  // These need orientation detection — check if fingers are roughly horizontal
-  // Skip for now as they're hard to distinguish heuristically
+  // 4. OPEN HAND / 5 / HELLO: All 5 fingers extended and spread
+  if (allFourExtended && f.thumbExtended && indexToMiddleTipDist > 0.18) {
+    return { letter: '5', label: 'Open Hand / 5', category: 'number', confidence: 0.91 };
+  }
 
-  // I: pinky only
-  if (!f.index && !f.middle && !f.ring && f.pinky && !f.thumb) return 'I';
+  // 5. B / 4: 4 fingers extended upright together
+  if (allFourExtended) {
+    if (f.thumbAcross || !f.thumbExtended) {
+      if (indexToMiddleTipDist < 0.22 && middleToRingTipDist < 0.22) {
+        return { letter: 'B', label: 'Letter B', category: 'letter', confidence: 0.9 };
+      }
+      return { letter: '4', label: 'Number 4', category: 'number', confidence: 0.88 };
+    }
+  }
 
-  // K / V / R: index + middle extended
+  // 6. W / 3: Index, Middle, Ring extended upright, Pinky curled
+  if (f.index && f.middle && f.ring && !f.pinky) {
+    if (f.thumbAcross || !f.thumbExtended) {
+      return { letter: 'W', label: 'Letter W', category: 'letter', confidence: 0.9 };
+    }
+    return { letter: '3', label: 'Number 3', category: 'number', confidence: 0.88 };
+  }
+
+  // 7. F / OK: Thumb & Index tips touching forming a circle, Middle, Ring, Pinky extended
+  if (f.middle && f.ring && f.pinky && !f.index) {
+    if (thumbToIndexTipDist < 0.28) {
+      return { letter: 'F', label: 'Letter F / OK', category: 'letter', confidence: 0.92 };
+    }
+  }
+
+  // 8. V / PEACE / 2 / U / R / K: Index + Middle extended, Ring & Pinky curled
   if (f.index && f.middle && !f.ring && !f.pinky) {
-    const idxTip = lm[INDEX_TIP];
-    const midTip = lm[MIDDLE_TIP];
-    const sep = dist2d(idxTip, midTip);
-    // R: crossed fingers (tips very close together)
-    if (sep < 0.04) return 'R';
-    // V: fingers spread apart
-    if (sep > 0.07) return 'V';
-    // K: fingers together but not crossed, thumb extended outward
-    if (f.thumb) return 'K';
-    return 'V';
+    // Check if fingers are crossed for 'R'
+    if (indexToMiddleTipDist < 0.12 && Math.abs(indexTip.x - middleTip.x) < 0.03 * palmSize) {
+      return { letter: 'R', label: 'Letter R', category: 'letter', confidence: 0.89 };
+    }
+    // U: Index & Middle held tightly together
+    if (indexToMiddleTipDist < 0.18 && !f.thumbExtended) {
+      return { letter: 'U', label: 'Letter U', category: 'letter', confidence: 0.89 };
+    }
+    // K: Thumb placed between index and middle
+    if (f.thumbExtended && thumbToMiddleTipDist < 0.35) {
+      return { letter: 'K', label: 'Letter K', category: 'letter', confidence: 0.87 };
+    }
+    // V: Peace sign, fingers spread apart
+    if (indexToMiddleTipDist >= 0.18) {
+      return { letter: 'V', label: 'Letter V / Peace ✌', category: 'letter', confidence: 0.92 };
+    }
+    return { letter: 'V', label: 'Letter V', category: 'letter', confidence: 0.86 };
   }
 
-  // W / Three: index + middle + ring
-  if (f.index && f.middle && f.ring && !f.pinky) return 'W';
-
-  // Y: thumb + pinky only ("hang loose")
-  if (f.thumb && !f.index && !f.middle && !f.ring && f.pinky) return 'Y';
-
-  // L: thumb + index (L shape)
-  if (f.thumb && f.index && !f.middle && !f.ring && !f.pinky) {
-    // Check it's roughly L-shaped (thumb perpendicular to index)
-    const thumbAngle = angle(lm[THUMB_TIP], lm[THUMB_MCP], lm[INDEX_MCP]);
-    if (thumbAngle > 0.5) return 'L';
-    return 'L';
+  // 9. D / 1 / Z: Index extended straight UP, others curled, thumb touching middle finger
+  if (f.index && !f.middle && !f.ring && !f.pinky && !f.thumbExtended) {
+    return { letter: 'D', label: 'Letter D / 1', category: 'letter', confidence: 0.91 };
   }
 
-  // P: like K but pointing downward — hard to detect, skip
-  // Q: like G but pointing downward — hard to detect, skip
-
-  // U: index + middle together (not spread)
-  if (f.index && f.middle && !f.ring && !f.pinky && !f.thumb) {
-    const idxTip = lm[INDEX_TIP];
-    const midTip = lm[MIDDLE_TIP];
-    if (dist2d(idxTip, midTip) < 0.045) return 'U';
-    return 'V';
+  // 10. I: Pinky extended straight UP, others curled
+  if (!f.index && !f.middle && !f.ring && f.pinky && !f.thumbExtended) {
+    return { letter: 'I', label: 'Letter I', category: 'letter', confidence: 0.92 };
   }
 
-  // Four: index+middle+ring+pinky, thumb not across
-  if (f.index && f.middle && f.ring && f.pinky && !f.thumb && !thumbAcross) return '4';
-
-  // Five / open hand
-  if (f.thumb && f.index && f.middle && f.ring && f.pinky) return '5';
-
-  // M: thumb under index+middle+ring (three fingers down over thumb)
-  if (!f.index && !f.middle && !f.ring && f.pinky && f.thumb) {
-    // N: thumb under index+middle (two fingers down)
-    // T: thumb between index+middle
-    // These are hard to distinguish — skip
+  // 11. O: All fingertips meeting thumb tip in a circular loop
+  if (!f.index && !f.middle && !f.ring && !f.pinky) {
+    if (thumbToIndexTipDist < 0.28 && thumbToMiddleTipDist < 0.28) {
+      return { letter: 'O', label: 'Letter O', category: 'letter', confidence: 0.9 };
+    }
   }
 
-  // X: index finger hooked (curled but not fully)
-  if (indexCurled && !middleCurled && !ringCurled && !pinkyCurled) return 'X';
+  // 12. C: Curved hand forming a 'C' arc
+  if (!allFourExtended && !allFourCurled && extCount >= 2) {
+    const isCurved =
+      thumbToIndexTipDist > 0.25 &&
+      thumbToIndexTipDist < 0.7 &&
+      dist2d(indexTip, lm[INDEX_MCP]) / palmSize > 0.5;
+    if (isCurved) {
+      return { letter: 'C', label: 'Letter C', category: 'letter', confidence: 0.85 };
+    }
+  }
 
-  // Z: index finger extended with motion — can't detect statically, treat as D
-  if (f.index && !f.middle && !f.ring && !f.pinky) return 'D';
+  // 13. X: Index hooked (half-curled), others curled
+  if (dist2d(indexTip, indexMcp) / palmSize > 0.45 && !f.index && f.middleCurled && f.ringCurled && f.pinkyCurled) {
+    return { letter: 'X', label: 'Letter X', category: 'letter', confidence: 0.85 };
+  }
 
-  // Fallbacks
-  if (extendedCount === 0 && f.thumb) return 'A';
-  if (f.thumb && f.index && f.middle && f.ring && f.pinky) return '5';
+  // 14. THUMBS UP / A / S / E / M / N / T (Fist variations)
+  if (allFourCurled || extCount === 0) {
+    // Thumbs Up: Thumb pointing upward (Y lower than wrist / MCP in upright posture)
+    const isThumbVertical = thumbTip.y < lm[THUMB_MCP].y && Math.abs(thumbTip.x - lm[THUMB_MCP].x) < 0.12 * palmSize;
+    if (isThumbVertical && f.thumbExtended) {
+      return { letter: '👍', label: 'Thumbs Up 👍', category: 'sign', confidence: 0.93 };
+    }
 
-  return null;
+    // A: Fist with thumb extended upright alongside the index finger
+    if (f.thumbExtended || thumbTip.y < indexMcp.y) {
+      return { letter: 'A', label: 'Letter A', category: 'letter', confidence: 0.9 };
+    }
+
+    // S: Fist with thumb folded over front of fingers
+    if (f.thumbAcross && thumbToMiddleTipDist < 0.35) {
+      return { letter: 'S', label: 'Letter S', category: 'letter', confidence: 0.88 };
+    }
+
+    // E: Fingertips curled against thumb with thumb tucked beneath
+    if (thumbToIndexTipDist < 0.3 && thumbToRingTipDist < 0.35) {
+      return { letter: 'E', label: 'Letter E', category: 'letter', confidence: 0.87 };
+    }
+
+    // Default fist fallback -> A
+    return { letter: 'A', label: 'Letter A', category: 'letter', confidence: 0.82 };
+  }
+
+  return { letter: null, label: 'Detecting...', category: 'letter', confidence: 0 };
 }
 
 export type RecognitionResult = {
   letter: string | null;
+  label: string;
+  category: 'letter' | 'number' | 'sign' | 'phrase';
   confidence: number;
   landmarks: Landmark[] | null;
+  fingerStates?: FingerState;
+  boundingBox?: { minX: number; minY: number; maxX: number; maxY: number };
+  center?: { x: number; y: number };
 };
 
 export async function recognizeFrame(
@@ -265,42 +360,108 @@ export async function recognizeFrame(
 ): Promise<RecognitionResult> {
   const lm = await getHandLandmarker();
   let result: HandLandmarkerResult;
-  const safeTimestamp = Math.max(timestampMs, lastVideoTimestamp + 1);
+
+  // Enforce strictly monotonic timestamp required by MediaPipe
+  const safeTimestamp = Math.max(Math.round(timestampMs), lastVideoTimestamp + 1);
   lastVideoTimestamp = safeTimestamp;
 
   try {
     result = lm.detectForVideo(video, safeTimestamp);
   } catch {
-    return { letter: null, confidence: 0, landmarks: null };
+    return {
+      letter: null,
+      label: 'Analyzing frame...',
+      category: 'letter',
+      confidence: 0,
+      landmarks: null,
+    };
   }
 
   if (!result.landmarks || result.landmarks.length === 0) {
-    return { letter: null, confidence: 0, landmarks: null };
+    return {
+      letter: null,
+      label: 'No hand detected',
+      category: 'letter',
+      confidence: 0,
+      landmarks: null,
+    };
   }
 
-  const hand = result.landmarks[0];
-  const letter = classifyLetter(hand as unknown as Landmark[]);
+  const rawLandmarks = result.landmarks[0] as unknown as Landmark[];
+  const fingerStates = getFingerStates(rawLandmarks);
+  const classification = classifyGesture(rawLandmarks);
 
-  // Use handedness score for confidence if available
-  let confidence = 0.75;
-  if (result.handedness && result.handedness.length > 0 && result.handedness[0].length > 0) {
-    const score = result.handedness[0][0].score;
-    if (score !== undefined) confidence = Math.max(confidence, score);
+  // Compute bounding box and center
+  let minX = 1;
+  let minY = 1;
+  let maxX = 0;
+  let maxY = 0;
+  let sumX = 0;
+  let sumY = 0;
+
+  for (const pt of rawLandmarks) {
+    minX = Math.min(minX, pt.x);
+    minY = Math.min(minY, pt.y);
+    maxX = Math.max(maxX, pt.x);
+    maxY = Math.max(maxY, pt.y);
+    sumX += pt.x;
+    sumY += pt.y;
   }
-  if (letter) confidence = Math.max(confidence, 0.8);
+
+  const center = {
+    x: sumX / rawLandmarks.length,
+    y: sumY / rawLandmarks.length,
+  };
 
   return {
-    letter,
-    confidence: letter ? confidence : 0,
-    landmarks: hand as unknown as Landmark[],
+    letter: classification.letter,
+    label: classification.label,
+    category: classification.category,
+    confidence: classification.confidence,
+    landmarks: rawLandmarks,
+    fingerStates,
+    boundingBox: { minX, minY, maxX, maxY },
+    center,
   };
 }
 
 export const HAND_CONNECTIONS: [number, number][] = [
-  [0, 1], [1, 2], [2, 3], [3, 4],
-  [0, 5], [5, 6], [6, 7], [7, 8],
-  [5, 9], [9, 10], [10, 11], [11, 12],
-  [9, 13], [13, 14], [14, 15], [15, 16],
-  [13, 17], [17, 18], [18, 19], [19, 20],
-  [0, 17],
+  // Thumb
+  [WRIST, THUMB_CMC],
+  [THUMB_CMC, THUMB_MCP],
+  [THUMB_MCP, THUMB_IP],
+  [THUMB_IP, THUMB_TIP],
+  // Index
+  [WRIST, INDEX_MCP],
+  [INDEX_MCP, INDEX_PIP],
+  [INDEX_PIP, INDEX_DIP],
+  [INDEX_DIP, INDEX_TIP],
+  // Middle
+  [INDEX_MCP, MIDDLE_MCP],
+  [MIDDLE_MCP, MIDDLE_PIP],
+  [MIDDLE_PIP, MIDDLE_DIP],
+  [MIDDLE_DIP, MIDDLE_TIP],
+  // Ring
+  [MIDDLE_MCP, RING_MCP],
+  [RING_MCP, RING_PIP],
+  [RING_PIP, RING_DIP],
+  [RING_DIP, RING_TIP],
+  // Pinky
+  [RING_MCP, PINKY_MCP],
+  [PINKY_MCP, PINKY_PIP],
+  [PINKY_PIP, PINKY_DIP],
+  [PINKY_DIP, PINKY_TIP],
+  // Palm base
+  [WRIST, PINKY_MCP],
 ];
+
+// Color mapping for hand landmark fingers for neon canvas rendering
+export const FINGER_COLORS = {
+  thumb: '#2dd4bf', // Teal
+  index: '#38bdf8', // Sky blue
+  middle: '#818cf8', // Indigo
+  ring: '#c084fc', // Purple
+  pinky: '#f472b6', // Pink
+  palm: '#94a3b8', // Slate
+};
+

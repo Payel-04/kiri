@@ -1,0 +1,11 @@
+{
+  "name": "SignSpeak - Sign Language Translator",
+  "description": "Real-time sign language recognition, searchable ASL video dictionary, and interactive learning platform translating hand gestures into spoken and written words.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

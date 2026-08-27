@@ -6,6 +6,7 @@ import AuthModal from '@/components/AuthModal';
 import Hero from '@/components/Hero';
 import About from '@/components/About';
 import Translate from '@/components/Translate';
+import Dictionary from '@/components/Dictionary';
 import Community from '@/components/Community';
 import Learn from '@/components/Learn';
 import Footer from '@/components/Footer';
@@ -20,6 +21,7 @@ function AppContent() {
         <Hero onAuthClick={() => setAuthOpen(true)} />
         <About />
         <Translate onAuthClick={() => setAuthOpen(true)} />
+        <Dictionary />
         <Community onAuthClick={() => setAuthOpen(true)} />
         <Learn />
       </main>

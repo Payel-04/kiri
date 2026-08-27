@@ -10,8 +10,9 @@ export default function Navbar({ onAuthClick }: NavbarProps) {
   const links = [
     { label: 'How it works', href: '#about' },
     { label: 'Translator', href: '#translate' },
-    { label: 'Join us', href: '#community' },
-    { label: 'Learn signs', href: '#learn' },
+    { label: 'Dictionary', href: '#dictionary' },
+    { label: 'Community', href: '#community' },
+    { label: 'Learn', href: '#learn' },
   ];
 
   const close = () => setOpen(false);
