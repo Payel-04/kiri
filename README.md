@@ -1,15 +1,17 @@
-# 🤟 SignSpeak — Real-Time Sign Language Translator
+# 🤟 Kiri — Real-Time Indian Sign Language (ISL) Translator
 
-**Kiri** is a modern, privacy-first web application that translates American Sign Language (ASL) hand gestures into text and spoken audio in real time. Built with React 18, TypeScript, MediaPipe Tasks Vision, and Supabase.
+**Kiri** is a modern, privacy-first web application that translates Indian Sign Language (ISL) hand gestures into text and spoken audio in real time. Built with React 18, TypeScript, MediaPipe Tasks Vision, 21-point hand coordinate recognition, and Supabase.
 
 ---
 
 ## ✨ Features
 
-- 📷 **Real-Time Hand Landmark Detection**: Powered by Google MediaPipe (`@mediapipe/tasks-vision`), tracking 21 3D hand keypoints directly inside the browser using GPU/WASM acceleration.
-- 🗣️ **Text-to-Speech (TTS)**: Spoken voice synthesis powered by the Web Speech API (`SpeechSynthesis`) with dynamic voice selection.
+- 📷 **Real-Time ISL Hand Landmark Detection**: Powered by Google MediaPipe (`@mediapipe/tasks-vision`), tracking 21 3D hand keypoints directly inside the browser using GPU/WASM acceleration with dual-handed and single-handed ISL recognition.
+- 📐 **21-Point Spatial Coordinate Recognition**: Mathematical landmark normalizer, RMSE evaluation, and canonical 3D topology matching across the complete ISL Alphabet (A–Z).
+- 🗣️ **Bilingual Text-to-Speech (TTS)**: Spoken voice synthesis in both Hindi and English powered by the Web Speech API (`SpeechSynthesis`).
 - ✍️ **Interactive Message Builder**: Real-time gesture letter accumulation into complete words and phrases, complete with **Space**, **Delete**, and **Clear** toolbar controls.
-- 🎓 **Interactive Mini-Lessons**: Practice common ASL signs (Hello, Thank You, I Love You, Help) with session progress tracking (`sessionStorage`).
+- 🎓 **Interactive ISL Academy**: 12 guided ISL lessons, multiple-choice skill quizzes, live webcam sign verification, and progress tracking with Supabase `learning_progress` sync.
+- 📖 **Comprehensive ISL Dictionary**: Searchable ISL vocabulary with Hindi translations, devanagari phonetic notations, category filters, and bookmarking.
 - 👥 **Community Message Board**: Share stories, feedback, and experiences with other learners and signers (powered by Supabase Database and Row Level Security).
 - 🔒 **Privacy First**: Video frames stay on your device canvas and are processed entirely client-side. No camera streams are recorded or uploaded.
 - 🛡️ **Error Boundary & Robust Architecture**: Built with React Error Boundaries to prevent unexpected runtime UI crashes and full TypeScript strict checking.
@@ -43,8 +45,8 @@
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-username/signspeak.git
-cd signspeak
+git clone https://github.com/your-username/kiri.git
+cd kiri
 npm install
 ```
 

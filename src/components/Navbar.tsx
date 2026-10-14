@@ -44,7 +44,7 @@ export default function Navbar({ onAuthClick }: NavbarProps) {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/25">
             <Hand size={20} strokeWidth={2.5} />
           </span>
-          <span className="font-display text-lg font-bold tracking-tight text-slate-900">Sign<span className="text-brand-600">Speak</span></span>
+          <span className="font-display text-lg font-bold tracking-tight text-slate-900">Ki<span className="text-brand-600">ri</span></span>
         </a>
 
         <div className="hidden items-center gap-7 md:flex">

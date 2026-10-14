@@ -6,7 +6,7 @@ import SectionHeading from '@/components/SectionHeading';
 
 type CommunityProps = { onAuthClick: () => void };
 
-const fallbackPosts: CommunityPost[] = [{ id: '1', user_id: '', author_name: 'Maya R.', message: 'The first time I used SignSpeak with my hearing coworkers, we all got emotional. This is the future.', created_at: new Date(Date.now() - 1000 * 60 * 34).toISOString() }, { id: '2', user_id: '', author_name: 'Jordan K.', message: 'Learning one new sign every day. Small steps, bigger conversations.', created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString() }];
+const fallbackPosts: CommunityPost[] = [{ id: '1', user_id: '', author_name: 'Maya R.', message: 'The first time I used Kiri with my hearing coworkers, we all got emotional. This is the future.', created_at: new Date(Date.now() - 1000 * 60 * 34).toISOString() }, { id: '2', user_id: '', author_name: 'Jordan K.', message: 'Learning one new sign every day. Small steps, bigger conversations.', created_at: new Date(Date.now() - 1000 * 60 * 120).toISOString() }];
 
 function formatTimeAgo(isoString: string): string {
   try {

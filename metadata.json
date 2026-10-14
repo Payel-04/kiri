@@ -1,6 +1,6 @@
 {
-  "name": "SignSpeak - Sign Language Translator",
-  "description": "Real-time sign language recognition, searchable ASL video dictionary, and interactive learning platform translating hand gestures into spoken and written words.",
+  "name": "Kiri - Sign Language Translator",
+  "description": "Real-time Indian Sign Language (ISL) recognition, searchable ISL dictionary with Hindi translations, two-handed gesture detection, and interactive learning platform.",
   "requestFramePermissions": [
     "camera",
     "microphone"

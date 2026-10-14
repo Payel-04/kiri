@@ -11,7 +11,7 @@ export default function About() {
         <SectionHeading
           eyebrow="How it works"
           title="Technology that gets out of the way"
-          description="SignSpeak is designed to make communication feel effortless. No complicated setup, no awkward pauses — just a bridge between two people."
+          description="Kiri is designed to make communication feel effortless. No complicated setup, no awkward pauses — just a bridge between two people."
         />
         <div className="mt-16 grid gap-6 md:grid-cols-3">
           {steps.map((step) => (

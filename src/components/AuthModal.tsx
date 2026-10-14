@@ -30,7 +30,7 @@ export default function AuthModal({ onClose }: AuthModalProps) {
     setSubmitting(false);
     if (result.error) { setError(result.error); return; }
     if (mode === 'signup') {
-      setNotice('Account created. Welcome to SignSpeak!');
+      setNotice('Account created. Welcome to Kiri!');
       setTimeout(onClose, 900);
     } else onClose();
   };

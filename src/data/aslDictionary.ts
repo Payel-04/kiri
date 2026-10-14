@@ -173,7 +173,7 @@ export const ASL_DICTIONARY: ASLSign[] = [
     location: 'Chest to shoulder height.',
     tips: [
       'This single handshape combines ASL fingerspelling "I", "L", and "Y".',
-      'Supported directly in the real-time SignSpeak vision camera.',
+      'Supported directly in the real-time Kiri vision camera.',
     ],
     emoji: '🤟',
     recognizedInCamera: true,
